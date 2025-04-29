@@ -1,11 +1,15 @@
-# 🚀 Crypto Sentiment + Trend Tracker (Standalone Version)
-
 import requests
 from bs4 import BeautifulSoup
 from collections import Counter
 import re
 import json
 from datetime import datetime
+from flask import Flask, jsonify
+
+app = Flask(__name__)
+
+# --- Data Holder ---
+sentiment_data = {}
 
 # --- Configuration ---
 COINGECKO_TRENDING_URL = "https://api.coingecko.com/api/v3/search/trending"
@@ -39,14 +43,13 @@ def fetch_reddit_mentions(trending_coins):
         mentions[symbol] = len(matches)
     return mentions
 
-def main():
-    print(f"[{datetime.now()}] Fetching crypto sentiment data...")
+def update_sentiment_data():
+    global sentiment_data
     trending_coins = fetch_trending_coins()
     fear_greed_score, fear_greed_class = fetch_fear_greed_index()
     reddit_mentions = fetch_reddit_mentions(trending_coins)
 
-    # Build final structured data
-    result = {
+    sentiment_data = {
         "timestamp": datetime.now().isoformat(),
         "fear_greed": {
             "score": fear_greed_score,
@@ -58,17 +61,20 @@ def main():
     for coin in trending_coins:
         mentions = reddit_mentions.get(coin, 0)
         signal = "BUY" if mentions >= 2 and fear_greed_score >= 50 else "CAUTION"
-        result["trending_coins"].append({
+        sentiment_data["trending_coins"].append({
             "symbol": coin,
             "reddit_mentions": mentions,
             "signal": signal
         })
 
-    # Save results to a JSON file
-    with open("sentiment_data.json", "w") as f:
-        json.dump(result, f, indent=4)
+@app.route("/")
+def root():
+    return "Crypto Sentiment Trends API is running 🚀"
 
-    print(f"[{datetime.now()}] Sentiment data saved to sentiment_data.json ✅")
+@app.route("/sentiment", methods=["GET"])
+def get_sentiment_data():
+    return jsonify(sentiment_data)
 
 if __name__ == "__main__":
-    main()
+    update_sentiment_data()
+    app.run(host="0.0.0.0", port=8000)
