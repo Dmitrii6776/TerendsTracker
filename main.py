@@ -5,6 +5,7 @@ import re
 import json
 from datetime import datetime
 from flask import Flask, jsonify
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 
@@ -45,27 +46,34 @@ def fetch_reddit_mentions(trending_coins):
 
 def update_sentiment_data():
     global sentiment_data
-    trending_coins = fetch_trending_coins()
-    fear_greed_score, fear_greed_class = fetch_fear_greed_index()
-    reddit_mentions = fetch_reddit_mentions(trending_coins)
+    print(f"[{datetime.now()}] Updating sentiment data...")
+    try:
+        trending_coins = fetch_trending_coins()
+        fear_greed_score, fear_greed_class = fetch_fear_greed_index()
+        reddit_mentions = fetch_reddit_mentions(trending_coins)
 
-    sentiment_data = {
-        "timestamp": datetime.now().isoformat(),
-        "fear_greed": {
-            "score": fear_greed_score,
-            "classification": fear_greed_class
-        },
-        "trending_coins": []
-    }
+        sentiment_data = {
+            "timestamp": datetime.now().isoformat(),
+            "fear_greed": {
+                "score": fear_greed_score,
+                "classification": fear_greed_class
+            },
+            "trending_coins": []
+        }
 
-    for coin in trending_coins:
-        mentions = reddit_mentions.get(coin, 0)
-        signal = "BUY" if mentions >= 2 and fear_greed_score >= 50 else "CAUTION"
-        sentiment_data["trending_coins"].append({
-            "symbol": coin,
-            "reddit_mentions": mentions,
-            "signal": signal
-        })
+        for coin in trending_coins:
+            mentions = reddit_mentions.get(coin, 0)
+            signal = "BUY" if mentions >= 2 and fear_greed_score >= 50 else "CAUTION"
+            sentiment_data["trending_coins"].append({
+                "symbol": coin,
+                "reddit_mentions": mentions,
+                "signal": signal
+            })
+
+        print(f"[{datetime.now()}] Sentiment data updated successfully.")
+
+    except Exception as e:
+        print(f"Error updating sentiment data: {e}")
 
 @app.route("/")
 def root():
@@ -77,4 +85,10 @@ def get_sentiment_data():
 
 if __name__ == "__main__":
     update_sentiment_data()
+
+    # Setup scheduler to auto-update every 30 minutes
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(update_sentiment_data, "interval", minutes=30)
+    scheduler.start()
+
     app.run(host="0.0.0.0", port=8000)
